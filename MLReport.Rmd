@@ -1,0 +1,18 @@
+---
+title: 'Coursera: Practical Machine Learning Prediction Assignment'
+author: "Pasi Hyytiäinen"
+date: "May, 2015"
+output: html_document
+---
+
+
+```{r}
+
+```
+
+
+
+```{r, echo=FALSE}
+
+```
+
