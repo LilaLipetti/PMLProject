@@ -1,0 +1,299 @@
+---
+title: 'Coursera: Practical Machine Learning Prediction Assignment'
+author: "Pasi Hyytiäinen"
+date: "May, 2015"
+output: html_document
+---
+
+# Introduction
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health. More information is available from the website here: [http://groupware.les.inf.puc-rio.br/har] (http://groupware.les.inf.puc-rio.br/har) (see the section on the Weight Lifting Exercise Dataset). 
+
+
+In this project, we will use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.  We will create a model with R and it's libraries. With this created model, we try to predict whether the exercise was done correctly, or incorrectly.
+
+
+# Summary
+This report has following parts
+
+1. Initial data processing    
+For model creation we need training and verification sets. We will need numerical data for our model, so we will remove not needed variables and variables which have some problmes on it to create our cleaned data set.
+
+2. Model creation    
+The claned data set will be split to training (80%) and cross verification (20%) dataset.
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;In this report, several machine learning algorithms will be tried out with:    
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ Boosting (see http://topepo.github.io/caret/training.html)    
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ C5.0 Decision Trees    
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ Naive Bayes    
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ Random Forest Classifier    
+
+
+3. Model validation and cross verification    
+For each model, accuracy will be calculated and each model will verified with the verification dataset.
+
+4. Final selected model will be use to predict the outcome of the given test data
+
+With selected Random Forest model, accuracy is 99.69% with out-of-bag error rate 0.31%. 
+ 
+ 
+# Initial data processing
+Training data can be downloaded from https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv and test data from https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv.
+
+Preliminary analysis of the data showed 2 issues        
+* some columns has big amount of 'NA's, when data is cleaned only columns without NA's should be included to model creation        
+* strange '#DIV/0!' strings on data, when data is read  '#DIV/0!' will be handled as NA's    
+
+### Download the data
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(warning=FALSE, message=FALSE)
+```
+
+```{r initLibraries, echo=FALSE}
+library(plyr)
+library(caret)
+library(doParallel)
+library(Hmisc)
+library(randomForest)
+library(C50)
+library(gbm)
+library(klaR)
+library(MASS)
+
+```
+
+```{r downloadData}
+##  set the seed so that analysis can be reproduced if needed
+set.seed(1304)
+
+trainDataUrl <-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testDataUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+trainDataFile <- "pml-training.csv"
+testDataFile  <- "pml-testing.csv"
+
+if (!file.exists(trainDataFile)) {
+  download.file(trainUrl, destfile=trainDataFile, method="curl")
+}
+if (!file.exists(testDataFile)) {
+  download.file(testUrl, destfile=testDataFile, method="curl")
+}
+```
+
+### Read and clean the data
+Preliminary analysis of the data showed 2 issues    
+* some columns has big amount of 'NA's     
+* strange '#DIV/0!' strings on data     
+
+```{r readData}
+
+trainRawData <- read.csv(trainDataFile,
+                         header=TRUE, 
+                         as.is = TRUE, 
+                         stringsAsFactors = FALSE, 
+                         sep=',', 
+                         na.strings=c('NA','','#DIV/0!'))
+
+testRawData <- read.csv(testDataFile,
+                        header=TRUE, 
+                        as.is = TRUE, 
+                        stringsAsFactors = FALSE, 
+                        sep=',', 
+                        na.strings=c('NA','','#DIV/0!'))
+
+```
+After reading    
+* train data contains `r nrow(trainRawData)` observations with `r ncol(trainRawData)` variables    
+* train data contains `r nrow(testRawData)` observations with `r ncol(testRawData)` variables
+
+
+### Data cleaning
+Data needs to be cleaned     
+* "classe"" is the wanted predictor     
+* "X"" column is just a row number     
+* "user_name"" is text field, it should be assumed that any person will do weightlifting exercise     
+* "raw_timestamp_part_1","raw_timestamp_part_2","cvtd_timestamp",                                                      "new_window","num_window": they looks like to be training date & time related data, not needed for prediction as it should be assumed that the person will train at any point of time not just in certain date and time     
+* select only columns with 100% completion rate     
+
+```{r cleanData}
+cleanedData<-trainRawData
+cleanedData$classe<- as.factor(cleanedData$classe)
+cleanedData<-cleanedData[!names(cleanedData) %in% c("X",
+                                                       "user_name",
+                                                       "raw_timestamp_part_1",
+                                                       "raw_timestamp_part_2",
+                                                       "cvtd_timestamp",
+                                                       "new_window",
+                                                       "num_window")]
+
+cleanedData <- cleanedData[, colSums(is.na(cleanedData)) == 0] 
+
+```
+
+After cleaning dataset contains `r nrow(cleanedData)` observations with `r ncol(cleanedData)` variables. We have removed `r ncol(trainRawData)-ncol(cleanedData)` variables from the test data. See appendix 1 for variable importance.
+
+
+# Model creation
+First we need to split up the cleaned data to training and verification set.
+```{r splitCleanedData}
+trainingIndex <- createDataPartition(cleanedData$classe, list=FALSE, p=.80)
+training<-cleanedData[trainingIndex,]
+verifiction <- cleanedData[-trainingIndex,]
+```
+
+For all models, we will use R predict-function to create predictions and confusionMatrix-function to create needed statistics.    
+
+## Models    
+### Boosting    
+(More info about boosting see http://topepo.github.io/caret/training.html)    
+I will use tit model with boosting algorithm and 10-fold cross validation to predict classe with all other predictors.    
+```{r doParallel, echo=FALSE}
+## doing things parallel, I have 4 cores ie. 8 with threds, so 6 should be fine
+
+registerDoParallel(6)
+```
+
+```{r modelBoost}
+boostControl<-trainControl(method = "cv", number = 10)
+modelBoost <- train(classe ~ ., 
+                    method = "gbm", 
+                    data = training, 
+                    verbose = F, 
+                    trControl = boostControl)
+training_pred_modelBoost <- predict(modelBoost, training) 
+cm_modelBoost   <- confusionMatrix(training_pred_modelBoost, training$classe)
+```
+
+
+### C5.0 Decision Trees    
+While preanalyzing the data, it can be seen that the CSV files are ordered. For C5.0 to  work, data needs to be in random order so boost-632 will be used.
+
+```{r modelC5 }
+fitControl <- trainControl(method='boot632')
+c50Grid <- expand.grid(trials = c(40,50,60,70), 
+                       model = c('tree'), 
+                       winnow = c(TRUE, FALSE))
+modelC50  <- train(classe ~ ., 
+                   data = training, 
+                   method='C5.0', 
+                   trControl=fitControl, 
+                   tuneGrid = c50Grid)
+training_pred_modelC50 <- predict( modelC50, training) 
+cm_modelC50   <- confusionMatrix(training_pred_modelC50, training$classe)
+
+```
+
+### Naive Bayes    
+When selecting Naive Bayes as learning method, the assumption is that each variable  contribute independently to the probability that the exercise was done correctly, or incorrectly.    
+
+
+```{r modelNaiveBayes}
+train_control <- trainControl(method="cv", number=10)
+
+modelNB <- train(classe~.,training,method='nb',
+                trControl=train_control)
+
+training_pred_modelNB <- predict(modelNB, training) 
+cm_modelNB   <- confusionMatrix(training_pred_modelNB, training$classe)
+```
+
+
+### Random Forest Classifier    
+10-folder cross validation model will be build as there should linear relationship between the variables. Random Forest was chosen because the given problem is a of classification problem.    
+
+```{r modelRF}
+train_control <- trainControl(method="cv", number=10)
+modelRF <- train(classe~., data=training, 
+                   trControl=train_control, method="rf")
+training_pred_modelRF <- predict(modelRF, training) 
+cm_modelRF2   <- confusionMatrix(training_pred_modelRF, training$classe)
+```
+
+
+## In-sample accuracy     
+
+Now we can calculate accuracy for our models
+```{r insampleAccuracy}
+trainAccuracy <- data.frame(ModelType=c('C50/boot362','Boost',
+                                        ' Naive Bayes ', 'RF 5 folder'), 
+                            Accuracy=c(cm_modelC50$overall['Accuracy'],
+                                       cm_modelBoost$overall['Accuracy'],
+                                       cm_modelNB$overall['Accuracy'],
+                                       cm_modelRF2$overall['Accuracy']))
+trainAccuracy                                       
+                                       
+```
+As it can be seen, only selected Naive Bayes method has quite low accuracy (74.9%). Others should give quite good predictions.    
+
+## Model verification
+Now we will do verification with our verification data (20% of the cleaned dataset)
+```{r modelVerification}
+vaccC50<-predict(modelC50,verifiction)
+vaccC50cm   <- confusionMatrix(vaccC50, verifiction$classe)
+
+vaccBoost<-predict(modelBoost,verifiction)
+vaccBoostcm   <- confusionMatrix(vaccBoost, verifiction$classe)
+
+
+vaccNBP<-predict(modelNB,verifiction)
+vaccNBPcm   <- confusionMatrix(vaccNBP, verifiction$classe)
+
+
+vaccRFP<-predict(modelRF,verifiction)
+vaccRFPcm   <- confusionMatrix(vaccRFP, verifiction$classe)
+
+
+verificationAccuracy <- data.frame(ModelType=c('C50/boot362', 
+                                                'Boost',
+                                                'Naive Bayes ', 
+                                                'RF 5 folder'), 
+                                   Accuracy=c(vaccC50cm$overall['Accuracy']*100,
+                                              vaccBoostcm$overall['Accuracy']*100,
+                                              vaccNBPcm$overall['Accuracy']*100,
+                                              vaccRFPcm$overall['Accuracy']*100),
+                                   OutOfSampleError=c(
+                                           (1-vaccC50cm$overall['Accuracy'])*100,
+                                           (1-vaccBoostcm$overall['Accuracy'])*100,
+                                           (1-cm_modelNB$overall['Accuracy'])*100,
+                                           (1-vaccRFPcm$overall['Accuracy'])*100
+                                           )
+                                   )
+```
+
+## Out-sample accuracy
+```{r}
+verificationAccuracy
+```
+
+So selected random forest provided the best result with     
+* accuracy `r round(verificationAccuracy$Accuracy[4],2)`     
+* out-of-bag error rate `r round(verificationAccuracy$OutOfSampleError[4],2)`    
+* confidence interval [`r vaccRFPcm$overall[3]`,`r vaccRFPcm$overall[4]`]    
+* Kappa `r vaccRFPcm$overall[2]`    
+
+# The final test with given test data
+
+```{r predictWithTestData}
+pml_write_files = function(x){
+        n = length(x)
+        for(i in 1:n){
+                filename = paste0("problem_id_", i, ".txt")
+                write.table(x[i], 
+                            file = filename, 
+                            quote = FALSE, 
+                            row.names = FALSE,
+                            col.names = FALSE)
+        }
+}
+
+predictRF<-predict(modelRF,testRawData)
+pml_write_files(predictRF)
+```
+
+# Appendix : Variable importance of the selected model
+
+Most probably the amount of variables could be dropped more. The computation time with 6 threads was good enough, so all 52 varibles was kept when defined models were created.
+
+```{r variableImportance}
+varImp(modelRF)
+```
