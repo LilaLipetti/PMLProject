@@ -2,6 +2,13 @@
 ## This is the full code file for the Practial Machine Learning course
 ## Pasi Hyytiäinen, May 2015
 ## More info https://github.com/LilaLipetti/PMLProject
+## 
+## Note! doParallel was used to boost up execution time
+## Noticed that sometimes the parallel execution didn't work 
+## (no errors or warnings noticed).
+## RStudio needed to be restarted to get it work, sometimes even 2-3 times.
+## 
+## Code execution time about 1,5-2h with win7, 16Gb, 6 threads
 ###########################################################################
 
 
