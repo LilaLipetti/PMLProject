@@ -71,6 +71,7 @@ img {
 <h1>Introduction</h1>
 <p>Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health. More information is available from the website here: [<a href="http://groupware.les.inf.puc-rio.br/har" class="uri">http://groupware.les.inf.puc-rio.br/har</a>] (<a href="http://groupware.les.inf.puc-rio.br/har" class="uri">http://groupware.les.inf.puc-rio.br/har</a>) (see the section on the Weight Lifting Exercise Dataset).</p>
 <p>In this project, we will use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. We will create a model with R and it’s libraries. With this created model, we try to predict whether the exercise was done correctly, or incorrectly.</p>
+<p>In this project, the plan was to find models with better than <strong>1% out of sample error</strong>. Using cross validation the model should be getting accuracy between 99% and 100% and vote validation should give 99 to 100% as well. It will be assumed that found model will over fit, but it would not cause any over fit errors.</p>
 </div>
 <div id="summary" class="section level1">
 <h1>Summary</h1>
@@ -79,17 +80,16 @@ img {
 <li><p>Initial data processing<br />For model creation we need training and verification sets. We will need numerical data for our model, so we will remove not needed variables and variables which have some problmes on it to create our cleaned data set.</p></li>
 <li><p>Model creation<br />The claned data set will be split to training (80%) and cross verification (20%) dataset.</p></li>
 </ol>
-<p>          In this report, several machine learning algorithms will be tried out with:<br />          + Boosting (see <a href="http://topepo.github.io/caret/training.html" class="uri">http://topepo.github.io/caret/training.html</a>)<br />          + C5.0 Decision Trees<br />          + Naive Bayes<br />          + Random Forest Classifier</p>
+<p>          In this report, several machine learning algorithms will be tried out with:<br />          + gmb Boosting (see <a href="http://topepo.github.io/caret/training.html" class="uri">http://topepo.github.io/caret/training.html</a>)<br />          + C5.0 Decision Trees<br />          + Naive Bayes<br />          + Random Forest Classifier</p>
 <ol start="3" style="list-style-type: decimal">
 <li><p>Model validation and cross verification<br />For each model, accuracy will be calculated and each model will verified with the verification dataset.</p></li>
 <li><p>Final selected model will be use to predict the outcome of the given test data</p></li>
 </ol>
-<p>With selected Random Forest model, accuracy is 99.69% with out-of-bag error rate 0.31%.</p>
+<p>With selected Random Forest model, accuracy is 99.69% with out of sample error rate 0.31%.</p>
 </div>
 <div id="initial-data-processing" class="section level1">
 <h1>Initial data processing</h1>
 <p>Training data can be downloaded from <a href="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv" class="uri">https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv</a> and test data from <a href="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv" class="uri">https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv</a>.</p>
-<p>Preliminary analysis of the data showed 2 issues<br />* some columns has big amount of ‘NA’s, when data is cleaned only columns without NA’s should be included to model creation<br />* strange’#DIV/0!‘strings on data, when data is read’#DIV/0!’ will be handled as NA’s</p>
 <div id="download-the-data" class="section level3">
 <h3>Download the data</h3>
 <pre class="r"><code>##  set the seed so that analysis can be reproduced if needed
@@ -109,7 +109,7 @@ if (!file.exists(testDataFile)) {
 </div>
 <div id="read-and-clean-the-data" class="section level3">
 <h3>Read and clean the data</h3>
-<p>Preliminary analysis of the data showed 2 issues<br />* some columns has big amount of ‘NA’s<br />* strange’#DIV/0!’ strings on data</p>
+<p>Preliminary analysis of the data showed 2 issues<br />* some columns has big amount of NA’s, when data is cleaned only columns without NA’s should be included to model creation<br />* strange <strong>#DIV/0!</strong> strings on data, when data is read <strong>#DIV/0!</strong> will be handled as NA’s</p>
 <pre class="r"><code>trainRawData &lt;- read.csv(trainDataFile,
                          header=TRUE, 
                          as.is = TRUE, 
@@ -127,7 +127,7 @@ testRawData &lt;- read.csv(testDataFile,
 </div>
 <div id="data-cleaning" class="section level3">
 <h3>Data cleaning</h3>
-<p>Data needs to be cleaned<br />* “classe”&quot; is the wanted predictor<br />* “X”&quot; column is just a row number<br />* “user_name”&quot; is text field, it should be assumed that any person will do weightlifting exercise<br />* “raw_timestamp_part_1”,“raw_timestamp_part_2”,“cvtd_timestamp”, “new_window”,“num_window”: they looks like to be training date &amp; time related data, not needed for prediction as it should be assumed that the person will train at any point of time not just in certain date and time<br />* select only columns with 100% completion rate</p>
+<p>Data needs to be cleaned<br />* <strong>classe</strong> is the wanted predictor<br />* <strong>X</strong> column is just a row number<br />* <strong>user_name</strong> is text field, it should be assumed that any person will do weightlifting exercise<br />* <strong>raw_timestamp_part_1</strong>,<strong>raw_timestamp_part_2</strong>,<strong>cvtd_timestamp</strong>, <strong>new_window</strong>,<strong>num_window</strong>: they looks like to be training date and time related data, not needed for prediction as it should be assumed that the person will train at any point of time not just in certain date and time<br />* select only columns with 100% completion rate</p>
 <pre class="r"><code>cleanedData&lt;-trainRawData
 cleanedData$classe&lt;- as.factor(cleanedData$classe)
 cleanedData&lt;-cleanedData[!names(cleanedData) %in% c(&quot;X&quot;,
@@ -139,7 +139,7 @@ cleanedData&lt;-cleanedData[!names(cleanedData) %in% c(&quot;X&quot;,
                                                        &quot;num_window&quot;)]
 
 cleanedData &lt;- cleanedData[, colSums(is.na(cleanedData)) == 0] </code></pre>
-<p>After cleaning dataset contains 19622 observations with 53 variables. We have removed 107 variables from the test data. See appendix 1 for variable importance.</p>
+<p>After cleaning dataset contains 19622 observations with 53 variables. We have removed 107 variables from the test data. See appendix 1 for variable importance for the final selected model.</p>
 </div>
 </div>
 <div id="model-creation" class="section level1">
@@ -148,12 +148,12 @@ cleanedData &lt;- cleanedData[, colSums(is.na(cleanedData)) == 0] </code></pre>
 <pre class="r"><code>trainingIndex &lt;- createDataPartition(cleanedData$classe, list=FALSE, p=.80)
 training&lt;-cleanedData[trainingIndex,]
 verifiction &lt;- cleanedData[-trainingIndex,]</code></pre>
-<p>For all models, we will use R predict-function to create predictions and confusionMatrix-function to create needed statistics.</p>
+<p>For all models, we will use R <strong>predict</strong>-function to create predictions and <strong>confusionMatrix</strong>-function to create needed statistics.</p>
 <div id="models" class="section level2">
 <h2>Models</h2>
-<div id="boosting" class="section level3">
-<h3>Boosting</h3>
-<p>(More info about boosting see <a href="http://topepo.github.io/caret/training.html" class="uri">http://topepo.github.io/caret/training.html</a>)<br />I will use tit model with boosting algorithm and 10-fold cross validation to predict classe with all other predictors.</p>
+<div id="gbm-boosting" class="section level3">
+<h3>gbm Boosting</h3>
+<p>(More info about boosting see <a href="http://topepo.github.io/caret/training.html" class="uri">http://topepo.github.io/caret/training.html</a>)<br />I will use <strong>gbm</strong> method with boosting algorithm and 10-fold cross validation to predict classe with all other predictors.</p>
 <pre class="r"><code>boostControl&lt;-trainControl(method = &quot;cv&quot;, number = 10)
 modelBoost &lt;- train(classe ~ ., 
                     method = &quot;gbm&quot;, 
@@ -165,7 +165,7 @@ cm_modelBoost   &lt;- confusionMatrix(training_pred_modelBoost, training$classe)
 </div>
 <div id="c5.0-decision-trees" class="section level3">
 <h3>C5.0 Decision Trees</h3>
-<p>While preanalyzing the data, it can be seen that the CSV files are ordered. For C5.0 to work, data needs to be in random order so boost-632 will be used.</p>
+<p>While preanalyzing the data, it can be seen that the CSV files are ordered. For <strong>C5.0</strong> to work, data needs to be in random order so <strong>boot632</strong> will be used.</p>
 <pre class="r"><code>fitControl &lt;- trainControl(method='boot632')
 c50Grid &lt;- expand.grid(trials = c(40,50,60,70), 
                        model = c('tree'), 
@@ -180,7 +180,7 @@ cm_modelC50   &lt;- confusionMatrix(training_pred_modelC50, training$classe)</co
 </div>
 <div id="naive-bayes" class="section level3">
 <h3>Naive Bayes</h3>
-<p>When selecting Naive Bayes as learning method, the assumption is that each variable contribute independently to the probability that the exercise was done correctly, or incorrectly.</p>
+<p>When selecting <strong>Naive Bayes</strong> as learning method, the assumption is that each variable contribute independently to the probability that the exercise was done correctly, or incorrectly.</p>
 <pre class="r"><code>train_control &lt;- trainControl(method=&quot;cv&quot;, number=10)
 
 modelNB &lt;- train(classe~.,training,method='nb',
@@ -191,7 +191,7 @@ cm_modelNB   &lt;- confusionMatrix(training_pred_modelNB, training$classe)</code
 </div>
 <div id="random-forest-classifier" class="section level3">
 <h3>Random Forest Classifier</h3>
-<p>10-folder cross validation model will be build as there should linear relationship between the variables. Random Forest was chosen because the given problem is a of classification problem.</p>
+<p>10-folder cross validation model will be build as there should linear relationship between the variables. <strong>Random Forest</strong> was chosen because the given problem is a of classification problem. Note! Several Random Forest models was tested and only one with wanted accuracy is shown in this final paper.</p>
 <pre class="r"><code>train_control &lt;- trainControl(method=&quot;cv&quot;, number=10)
 modelRF &lt;- train(classe~., data=training, 
                    trControl=train_control, method=&quot;rf&quot;)
@@ -202,7 +202,7 @@ cm_modelRF2   &lt;- confusionMatrix(training_pred_modelRF, training$classe)</cod
 <div id="in-sample-accuracy" class="section level2">
 <h2>In-sample accuracy</h2>
 <p>Now we can calculate accuracy for our models</p>
-<pre class="r"><code>trainAccuracy &lt;- data.frame(ModelType=c('C50/boot362','Boost',
+<pre class="r"><code>trainAccuracy &lt;- data.frame(ModelType=c('C50/boot632','gbm Boosting',
                                         ' Naive Bayes ', 'RF 5 folder'), 
                             Accuracy=c(cm_modelC50$overall['Accuracy'],
                                        cm_modelBoost$overall['Accuracy'],
@@ -210,8 +210,8 @@ cm_modelRF2   &lt;- confusionMatrix(training_pred_modelRF, training$classe)</cod
                                        cm_modelRF2$overall['Accuracy']))
 trainAccuracy                                       </code></pre>
 <pre><code>##       ModelType  Accuracy
-## 1   C50/boot362 1.0000000
-## 2         Boost 0.9741385
+## 1   C50/boot632 1.0000000
+## 2  gbm Boosting 0.9741385
 ## 3  Naive Bayes  0.7490923
 ## 4   RF 5 folder 1.0000000</code></pre>
 <p>As it can be seen, only selected Naive Bayes method has quite low accuracy (74.9%). Others should give quite good predictions.</p>
@@ -234,8 +234,8 @@ vaccRFP&lt;-predict(modelRF,verifiction)
 vaccRFPcm   &lt;- confusionMatrix(vaccRFP, verifiction$classe)
 
 
-verificationAccuracy &lt;- data.frame(ModelType=c('C50/boot362', 
-                                                'Boost',
+verificationAccuracy &lt;- data.frame(ModelType=c('C50/boot632', 
+                                                'gbm Boosting',
                                                 'Naive Bayes ', 
                                                 'RF 5 folder'), 
                                    Accuracy=c(vaccC50cm$overall['Accuracy']*100,
@@ -254,11 +254,11 @@ verificationAccuracy &lt;- data.frame(ModelType=c('C50/boot362',
 <h2>Out-sample accuracy</h2>
 <pre class="r"><code>verificationAccuracy</code></pre>
 <pre><code>##      ModelType Accuracy OutOfSampleError
-## 1  C50/boot362 99.61764        0.3823604
-## 2        Boost 96.17640        3.8236044
+## 1  C50/boot632 99.61764        0.3823604
+## 2 gbm Boosting 96.17640        3.8236044
 ## 3 Naive Bayes  73.23477       25.0907701
 ## 4  RF 5 folder 99.69411        0.3058884</code></pre>
-<p>So selected random forest provided the best result with<br />* accuracy 99.69<br />* out-of-bag error rate 0.31<br />* confidence interval [0.9946628,0.9984185]<br />* Kappa 0.9961308</p>
+<p>So selected random forest provided the best result with<br />* accuracy 99.69<br />* out of sample error rate 0.31<br />* confidence interval [0.9946628,0.9984185]<br />* Kappa 0.9961308</p>
 </div>
 </div>
 <div id="the-final-test-with-given-test-data" class="section level1">
@@ -280,7 +280,7 @@ pml_write_files(predictRF)</code></pre>
 </div>
 <div id="appendix-variable-importance-of-the-selected-model" class="section level1">
 <h1>Appendix : Variable importance of the selected model</h1>
-<p>Most probably the amount of variables could be dropped more. The computation time with 6 threads was good enough, so all 52 varibles was kept when defined models were created.</p>
+<p>Most probably the amount of variables could be dropped even more. The computation time with 6 threads was good enough, so all varibles was kept when defined models were created.</p>
 <pre class="r"><code>varImp(modelRF)</code></pre>
 <pre><code>## rf variable importance
 ## 
