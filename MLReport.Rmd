@@ -12,6 +12,7 @@ Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible t
 
 In this project, we will use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.  We will create a model with R and it's libraries. With this created model, we try to predict whether the exercise was done correctly, or incorrectly.
 
+In this project, the plan was to find models with better than **1% out of sample error**. Using cross validation the model should be getting accuracy between 99% and 100% and vote validation should give 99 to 100% as well. It will be assumed that found model will over fit, but it would not cause any over fit errors.
 
 # Summary
 This report has following parts
@@ -23,7 +24,7 @@ For model creation we need training and verification sets. We will need numerica
 The claned data set will be split to training (80%) and cross verification (20%) dataset.
 
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;In this report, several machine learning algorithms will be tried out with:    
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ Boosting (see http://topepo.github.io/caret/training.html)    
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ gmb Boosting (see http://topepo.github.io/caret/training.html)    
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ C5.0 Decision Trees    
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ Naive Bayes    
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ Random Forest Classifier    
@@ -34,15 +35,11 @@ For each model, accuracy will be calculated and each model will verified with th
 
 4. Final selected model will be use to predict the outcome of the given test data
 
-With selected Random Forest model, accuracy is 99.69% with out-of-bag error rate 0.31%. 
+With selected Random Forest model, accuracy is 99.69% with out of sample error rate 0.31%. 
  
  
 # Initial data processing
 Training data can be downloaded from https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv and test data from https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv.
-
-Preliminary analysis of the data showed 2 issues        
-* some columns has big amount of 'NA's, when data is cleaned only columns without NA's should be included to model creation        
-* strange '#DIV/0!' strings on data, when data is read  '#DIV/0!' will be handled as NA's    
 
 ### Download the data
 
@@ -81,9 +78,9 @@ if (!file.exists(testDataFile)) {
 ```
 
 ### Read and clean the data
-Preliminary analysis of the data showed 2 issues    
-* some columns has big amount of 'NA's     
-* strange '#DIV/0!' strings on data     
+Preliminary analysis of the data showed 2 issues        
+* some columns has big amount of NA's, when data is cleaned only columns without NA's should be included to model creation        
+* strange **#DIV/0!** strings on data, when data is read  **#DIV/0!** will be handled as NA's      
 
 ```{r readData}
 
@@ -109,10 +106,10 @@ After reading
 
 ### Data cleaning
 Data needs to be cleaned     
-* "classe"" is the wanted predictor     
-* "X"" column is just a row number     
-* "user_name"" is text field, it should be assumed that any person will do weightlifting exercise     
-* "raw_timestamp_part_1","raw_timestamp_part_2","cvtd_timestamp",                                                      "new_window","num_window": they looks like to be training date & time related data, not needed for prediction as it should be assumed that the person will train at any point of time not just in certain date and time     
+* **classe** is the wanted predictor     
+* **X** column is just a row number     
+* **user_name** is text field, it should be assumed that any person will do weightlifting exercise     
+* **raw_timestamp_part_1**,**raw_timestamp_part_2**,**cvtd_timestamp**,                                                      **new_window**,**num_window**: they looks like to be training date and time related data, not needed for prediction as it should be assumed that the person will train at any point of time not just in certain date and time     
 * select only columns with 100% completion rate     
 
 ```{r cleanData}
@@ -130,7 +127,7 @@ cleanedData <- cleanedData[, colSums(is.na(cleanedData)) == 0]
 
 ```
 
-After cleaning dataset contains `r nrow(cleanedData)` observations with `r ncol(cleanedData)` variables. We have removed `r ncol(trainRawData)-ncol(cleanedData)` variables from the test data. See appendix 1 for variable importance.
+After cleaning dataset contains `r nrow(cleanedData)` observations with `r ncol(cleanedData)` variables. We have removed `r ncol(trainRawData)-ncol(cleanedData)` variables from the test data. See appendix 1 for variable importance for the final selected model.
 
 
 # Model creation
@@ -141,19 +138,19 @@ training<-cleanedData[trainingIndex,]
 verifiction <- cleanedData[-trainingIndex,]
 ```
 
-For all models, we will use R predict-function to create predictions and confusionMatrix-function to create needed statistics.    
+For all models, we will use R **predict**-function to create predictions and **confusionMatrix**-function to create needed statistics.    
 
 ## Models    
-### Boosting    
+### gbm Boosting    
 (More info about boosting see http://topepo.github.io/caret/training.html)    
-I will use tit model with boosting algorithm and 10-fold cross validation to predict classe with all other predictors.    
+I will use **gbm** method with boosting algorithm and 10-fold cross validation to predict classe with all other predictors.    
 ```{r doParallel, echo=FALSE}
 ## doing things parallel, I have 4 cores ie. 8 with threds, so 6 should be fine
 
 registerDoParallel(6)
 ```
 
-```{r modelBoost}
+```{r modelgbmBoost}
 boostControl<-trainControl(method = "cv", number = 10)
 modelBoost <- train(classe ~ ., 
                     method = "gbm", 
@@ -166,7 +163,7 @@ cm_modelBoost   <- confusionMatrix(training_pred_modelBoost, training$classe)
 
 
 ### C5.0 Decision Trees    
-While preanalyzing the data, it can be seen that the CSV files are ordered. For C5.0 to  work, data needs to be in random order so boost-632 will be used.
+While preanalyzing the data, it can be seen that the CSV files are ordered. For **C5.0** to  work, data needs to be in random order so **boot632** will be used.
 
 ```{r modelC5 }
 fitControl <- trainControl(method='boot632')
@@ -184,7 +181,7 @@ cm_modelC50   <- confusionMatrix(training_pred_modelC50, training$classe)
 ```
 
 ### Naive Bayes    
-When selecting Naive Bayes as learning method, the assumption is that each variable  contribute independently to the probability that the exercise was done correctly, or incorrectly.    
+When selecting **Naive Bayes** as learning method, the assumption is that each variable  contribute independently to the probability that the exercise was done correctly, or incorrectly.    
 
 
 ```{r modelNaiveBayes}
@@ -199,7 +196,8 @@ cm_modelNB   <- confusionMatrix(training_pred_modelNB, training$classe)
 
 
 ### Random Forest Classifier    
-10-folder cross validation model will be build as there should linear relationship between the variables. Random Forest was chosen because the given problem is a of classification problem.    
+10-folder cross validation model will be build as there should linear relationship between the variables. **Random Forest** was chosen because the given problem is a of classification problem. 
+Note! Several Random Forest models was tested and only one with wanted accuracy is shown in this final paper.
 
 ```{r modelRF}
 train_control <- trainControl(method="cv", number=10)
@@ -214,7 +212,7 @@ cm_modelRF2   <- confusionMatrix(training_pred_modelRF, training$classe)
 
 Now we can calculate accuracy for our models
 ```{r insampleAccuracy}
-trainAccuracy <- data.frame(ModelType=c('C50/boot362','Boost',
+trainAccuracy <- data.frame(ModelType=c('C50/boot632','gbm Boosting',
                                         ' Naive Bayes ', 'RF 5 folder'), 
                             Accuracy=c(cm_modelC50$overall['Accuracy'],
                                        cm_modelBoost$overall['Accuracy'],
@@ -243,8 +241,8 @@ vaccRFP<-predict(modelRF,verifiction)
 vaccRFPcm   <- confusionMatrix(vaccRFP, verifiction$classe)
 
 
-verificationAccuracy <- data.frame(ModelType=c('C50/boot362', 
-                                                'Boost',
+verificationAccuracy <- data.frame(ModelType=c('C50/boot632', 
+                                                'gbm Boosting',
                                                 'Naive Bayes ', 
                                                 'RF 5 folder'), 
                                    Accuracy=c(vaccC50cm$overall['Accuracy']*100,
@@ -267,7 +265,7 @@ verificationAccuracy
 
 So selected random forest provided the best result with     
 * accuracy `r round(verificationAccuracy$Accuracy[4],2)`     
-* out-of-bag error rate `r round(verificationAccuracy$OutOfSampleError[4],2)`    
+* out of sample error rate `r round(verificationAccuracy$OutOfSampleError[4],2)`    
 * confidence interval [`r vaccRFPcm$overall[3]`,`r vaccRFPcm$overall[4]`]    
 * Kappa `r vaccRFPcm$overall[2]`    
 
@@ -292,7 +290,7 @@ pml_write_files(predictRF)
 
 # Appendix : Variable importance of the selected model
 
-Most probably the amount of variables could be dropped more. The computation time with 6 threads was good enough, so all 52 varibles was kept when defined models were created.
+Most probably the amount of variables could be dropped even more. The computation time with 6 threads was good enough, so all varibles was kept when defined models were created.
 
 ```{r variableImportance}
 varImp(modelRF)
